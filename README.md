@@ -56,11 +56,11 @@ nano config.env
 
 ### 4️⃣ Configurar el servicio systemd
 
-Copiar archivo `klipper-printer-on-off` en `/etc/systemd/system/printer-on-off.service` con:
+Copiar archivo `klipper-printer-on-off` en `/etc/systemd/system/klipper-printer-on-off.service` con:
 
 ```bash
 cd /home/pi/klipper-printer-on-off
-cp klipper-printer-on-off.service /etc/systemd/system/printer-on-off.service
+cp klipper-printer-on-off.service /etc/systemd/system/klipper-printer-on-off.service
 ```
 
 Habilitar y arrancar el servicio:

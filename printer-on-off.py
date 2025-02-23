@@ -10,7 +10,7 @@ from http.server import SimpleHTTPRequestHandler, HTTPServer
 from PyP100 import PyP110
 
 # Configuración de logs
-LOG_FILE = "/home/pi/tapo/printer_on_off_log.log"
+LOG_FILE = "/home/pi/klipper-printer-on-off/printer_on_off_log.log"
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
