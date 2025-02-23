@@ -21,7 +21,7 @@ logging.basicConfig(
 )
 
 # Cargar variables de entorno
-load_dotenv()
+load_dotenv("config.env")
 TAPO_ADDRESS = os.getenv("TAPO_ADDRESS_P115")
 TAPO_USERNAME = os.getenv("TAPO_USERNAME")
 TAPO_PASSWORD = os.getenv("TAPO_PASSWORD")
