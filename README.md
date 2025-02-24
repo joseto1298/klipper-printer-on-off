@@ -6,7 +6,6 @@ Este proyecto permite encender y apagar automáticamente una impresora 3D conect
 
 ✅ Encendido y apagado remoto de la impresora.  
 ✅ Integración con Moonraker para control automático.  
-✅ Protección contra apagados durante la impresión.  
 ✅ Verificación de temperatura antes de apagar la impresora.  
 ✅ Reintentos en caso de fallos de conexión.
 
@@ -35,16 +34,16 @@ cd ~ && git clone https://github.com/joseto1298/klipper-printer-on-off.git
 sudo apt update && sudo apt install python3-pip python3-venv
 python3 -m venv /home/pi/klipper-printer-on-off/.venv
 source /home/pi/klipper-printer-on-off/.venv/bin/activate
-pip install requests dotenv PyP100
+pip install -r requirements.txt
 ```
 
 ### 3️⃣ Configurar credenciales de TAPO
 
-Copiar archivo `config-example.env` en `/home/pi/klipper-printer-on-off/config.env` con:
+Copiar archivo `example.env` en `/home/pi/klipper-printer-on-off/.env` con:
 
 ```bash
 cd /home/pi/klipper-printer-on-off
-cp config-example.env config.env
+cp example.env .env
 ```
 
 Modificar fichero con:
@@ -75,51 +74,10 @@ sudo systemctl start klipper-printer-on-off
 
 Añadir el contenido de `moonraker-example.cfg` a `moonraker.cfg`:
 
-## 🔥 Uso
+Añadir el contenido de `macro-example.cfg` a `printer.cfg`:
 
 - Encender la impresora: `M80` en Klipper.
 - Apagar la impresora: `M81` en Klipper.
-- Control manual:
-  - **Encender**: `curl http://localhost:56427/on`
-  - **Apagar**: `curl http://localhost:56427/off`
-  - **Estado**: `curl http://localhost:56427/status`
-
----
-
-## 🛠️ Solución de Problemas
-
-🔹 **El enchufe TAPO no responde**
-
-- Verifica que la Raspberry Pi esté conectada a la red.
-- Revisa que la IP en `config.env` sea correcta.
-- Reinicia el servicio:
-  ```bash
-  sudo systemctl restart klipper-printer-on-off
-  ```
-
-🔹 **Moonraker no enciende la impresora automáticamente**
-
-- Asegúrate de haber agregado la configuración en `moonraker.conf`.
-- Verifica los logs con:
-  ```bash
-  tail -f /var/log/moonraker.log
-  ```
-
-🔹 **Klipper no reconoce M80/M81**
-
-- Agregar en `printer.cfg`:
-
-  ```ini
-  [gcode_macro M80]
-  gcode:
-    {action_call_remote_method('set_device_power', device='printer', state='on')}
-
-  [gcode_macro M81]
-  gcode:
-    {action_call_remote_method('set_device_power', device='printer', state='off')}
-  ```
-
----
 
 ## 📜 Licencia
 
