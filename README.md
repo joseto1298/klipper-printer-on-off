@@ -34,7 +34,7 @@ cd ~ && git clone https://github.com/joseto1298/klipper-printer-on-off.git
 sudo apt update && sudo apt install python3-pip python3-venv
 python3 -m venv /home/pi/klipper-printer-on-off/.venv
 source /home/pi/klipper-printer-on-off/.venv/bin/activate
-pip install -r requirements.txt
+pip install -r /home/pi/klipper-printer-on-off/requirements.txt
 ```
 
 ### 3️⃣ Configurar credenciales de TAPO
@@ -78,6 +78,8 @@ Añadir el contenido de `macro-example.cfg` a `printer.cfg`:
 
 - Encender la impresora: `M80` en Klipper.
 - Apagar la impresora: `M81` en Klipper.
+
+### 6️⃣ Configurar Moonraker
 
 ## 📜 Licencia
 

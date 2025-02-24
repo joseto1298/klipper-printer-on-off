@@ -1,4 +1,4 @@
-quart
-requests
-tapo
-python-dotenv
+Quart==0.20.0
+requests==2.32.3
+tapo==0.8.1
+dotenv==0.9.9
