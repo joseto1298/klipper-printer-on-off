@@ -80,15 +80,15 @@ async def wait_for_cooldown():
         
         if printing:
             logging.info("⏳ La impresora ha comenzado otra impresión. Cancelando apagado.")
-            return False  # Se cancela la orden de apagado
+            return {"printing": True}  # Se cancela la orden de apagado
 
         if nozzle_temp is None:
             logging.error("❌ No se pudo obtener la temperatura del nozzle.")
-            return False
+            return {"nozzle_temp": None}  # No se puede determinar la temperatura
 
         if nozzle_temp <= NOZZLE_COOLDOWN_TEMP:
             logging.info(f"✅ Nozzle frío ({nozzle_temp}°C). Procediendo con el apagado.")
-            return True  # Puede apagarse
+            return {"can_turn_off": True}  # Puede apagarse
 
         logging.info(f"⏳ Esperando enfriamiento... Nozzle: {nozzle_temp}°C")
         await asyncio.sleep(30)  # Esperar 30 segundos antes de volver a verificar
@@ -101,11 +101,13 @@ async def turn_off_if_possible():
         return
     
     can_turn_off = await wait_for_cooldown()
-    if can_turn_off:
+    if can_turn_off.get("can_turn_off"):
         await device.off()  # 🔹 `await` para apagar
         logging.info("✅ Impresora apagada correctamente.")
-    else:
+    if can_turn_off.get("printing"):
         logging.info("🚫 Apagado cancelado porque la impresora comenzó otra impresión.")
+    if can_turn_off.get("nozzle_temp") is None:
+        logging.error("❌ No se pudo determinar la temperatura del nozzle. Apagado cancelado.")
 
 @app.route('/on', methods=['GET'])
 async def turn_on():
