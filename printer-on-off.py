@@ -49,9 +49,9 @@ async def get_device(max_retries=10, delay=5):
                 logging.error("🚨 Se agotaron los intentos para conectar con TAPO P115.")
                 return None  # Retornar None en caso de fallo
 
-async def get_printer_status(max_retries=10, delay=5):
+async def get_printer_status():
     """Consulta el estado de la impresora en OctoPrint con reintentos en caso de error."""
-    for attempt in range(1, max_retries + 1):
+    while True:
         async with aiohttp.ClientSession() as session:
             try:
                 async with session.get(OCTOPRINT_API_URL) as response:
@@ -63,15 +63,7 @@ async def get_printer_status(max_retries=10, delay=5):
                     
                     logging.error(f"⚠️ Error en la respuesta de OctoPrint (Código {response.status})")
             except Exception as e:
-                logging.error(f"❌ Error al obtener el estado de la impresora (Intento {attempt}): {e}")
-
-            if attempt < max_retries:
-                sleep_time = delay * 2 ** (attempt - 1)
-                logging.info(f"⏳ Reintentando en {sleep_time} segundos...")
-                await asyncio.sleep(sleep_time)
-            else:
-                logging.error("🚨 Se agotaron los intentos para obtener el estado de la impresora.")
-                return None, None
+                logging.error(f"❌ Error al obtener el estado de la impresora: {e}")
 
 async def wait_for_cooldown():
     """Espera a que la boquilla (nozzle) se enfríe antes de apagar la impresora."""
