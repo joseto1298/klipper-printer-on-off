@@ -122,7 +122,7 @@ async def turn_off_if_possible():
     device = await get_device()
     if not device:
         logging.error("❌ No se pudo conectar al TAPO P115 para apagarlo.")
-        return
+        return jsonify({"status": "error", "message": "No se pudo conectar al dispositivo TAPO"}), 500
     
     can_turn_off = await wait_for_cooldown()
 
@@ -131,15 +131,19 @@ async def turn_off_if_possible():
         await asyncio.sleep(5)
         await send_klipper_command("FIRMWARE_RESTART")
         logging.info("✅ Impresora apagada correctamente.")
+        return jsonify({"status": False})
 
     elif can_turn_off.get("printing"):
         logging.info("🚫 Apagado cancelado porque la impresora comenzó otra impresión.")
-    
+        return jsonify({"status": True})
+
     elif can_turn_off.get("nozzle_temp") is None:
         await device.off()
         await asyncio.sleep(5)
         await send_klipper_command("FIRMWARE_RESTART")
         logging.error("❌ Apagado forzado, No se pudo determinar la temperatura del nozzle")
+        return jsonify({"status": False})
+
 
 @app.route('/on', methods=['GET'])
 async def turn_on():
@@ -150,6 +154,7 @@ async def turn_on():
     
     await device.on()
     logging.info("✅ Dispositivo TAPO encendido.")
+    return jsonify({"status": True})
 
 @app.route('/off', methods=['GET'])
 async def turn_off():
