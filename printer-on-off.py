@@ -82,6 +82,7 @@ async def get_device(max_retries=10, delay=5):
 
 async def get_printer_status(retries=5):
     """Consulta el estado de la impresora en OctoPrint con reintentos en caso de error."""
+    await asyncio.sleep(30)
     for attempt in range(retries):
         try:
             async with session.get(API_URL_STATUS, timeout=5) as response:
