@@ -1,4 +1,4 @@
-aiohttp==3.12.15
+aiohttp==3.13.5
 dotenv==0.9.9
-tapo==0.8.6
 Quart==0.20.0
+plugp100==5.1.7
