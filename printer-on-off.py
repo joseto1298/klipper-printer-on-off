@@ -4,10 +4,8 @@ from logging.handlers import TimedRotatingFileHandler
 from dotenv import load_dotenv
 from quart import Quart, jsonify
 
-from plugp100.common.credentials import AuthCredential
-from plugp100.new.device_factory import connect, DeviceConnectConfiguration
+from tapo import ApiClient
 
-# --- CONFIGURACIÓN DE LOGS (3 DÍAS) ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_FILE = os.path.join(BASE_DIR, "printer_on_off.log")
 log_handler = TimedRotatingFileHandler(LOG_FILE, when="midnight", interval=1, backupCount=3, encoding="utf-8")
@@ -24,26 +22,27 @@ IP = os.getenv("TAPO_ADDRESS_P115")
 
 app = Quart(__name__)
 
+_client = None
+_device = None
+
 async def get_device():
-    """Crea la conexión y retorna el dispositivo y su cliente para poder cerrarlo después"""
+    global _client, _device
     try:
-        credentials = AuthCredential(USER, PASS)
-        config = DeviceConnectConfiguration(host=IP, credentials=credentials)
-        device = await connect(config)
-        await device.update()
-        return device
+        if _client is None:
+            _client = ApiClient(USER, PASS)
+        if _device is None:
+            _device = await _client.p115(IP)
+        return _device
     except Exception as e:
-        logging.error(f"❌ Error conectando: {e}")
+        logging.error(f"Error conectando: {e}")
         return None
 
 @app.route('/on')
 async def turn_on():
     device = await get_device()
     if device:
-        await device.turn_on()
-        logging.info("✅ Impresora Encendida")
-        # Cerramos la sesión manualmente para evitar el error de "Unclosed session"
-        await device.client.close()
+        await device.on()
+        logging.info("Impresora Encendida")
         return jsonify({"status": True})
     return jsonify({"status": "error"}), 500
 
@@ -51,9 +50,8 @@ async def turn_on():
 async def turn_off():
     device = await get_device()
     if device:
-        await device.turn_off()
-        logging.info("✅ Impresora Apagada")
-        await device.client.close()
+        await device.off()
+        logging.info("Impresora Apagada")
         return jsonify({"status": False})
     return jsonify({"status": "error"}), 500
 
@@ -62,13 +60,12 @@ async def status():
     device = await get_device()
     if not device:
         return jsonify({"status": "error"}), 500
-    
     try:
-        is_on = device.is_on
-        await device.client.close()
+        device_info = await device.get_device_info()
+        is_on = device_info.to_dict().get("device_on", False)
         return jsonify({"status": is_on})
     except Exception as e:
-        logging.error(f"❌ Error de estado: {e}")
+        logging.error(f"Error de estado: {e}")
         return jsonify({"status": "error"}), 500
 
 if __name__ == '__main__':
