@@ -61,8 +61,8 @@ async def status():
     if not device:
         return jsonify({"status": "error"}), 500
     try:
-        device_info = await device.get_device_info()
-        is_on = device_info.to_dict().get("device_on", False)
+        device_info = await device.get_device_info_json()
+        is_on = device_info.get("result", device_info).get("device_on", False)
         return jsonify({"status": is_on})
     except Exception as e:
         logging.error(f"Error de estado: {e}")
