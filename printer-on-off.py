@@ -77,13 +77,14 @@ async def status():
         return jsonify({"status": "error"}), 500
     try:
         sys_info = await device.get_sys_info()
-        if sys_info is None:
-            return jsonify({"status": "error"}), 500
-        info = sys_info.__dict__ if hasattr(sys_info, "__dict__") else sys_info
-        if "relay_state" in info:
-            is_on = info["relay_state"] == 1
-        elif "device_on" in info:
-            is_on = info["device_on"] is True
+        if sys_info is not None:
+            info = sys_info.__dict__ if hasattr(sys_info, "__dict__") else sys_info
+            if "relay_state" in info:
+                is_on = info["relay_state"] == 1
+            elif "device_on" in info:
+                is_on = info["device_on"] is True
+            else:
+                is_on = await device.is_on()
         else:
             is_on = await device.is_on()
         return jsonify({"status": bool(is_on)})
