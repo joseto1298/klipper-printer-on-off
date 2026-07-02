@@ -1,10 +1,10 @@
 import os
+import asyncio
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from dotenv import load_dotenv
 from quart import Quart, jsonify
-
-from tapo import ApiClient
+from tplinkcloud import TPLinkDeviceManager
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_FILE = os.path.join(BASE_DIR, "printer_on_off.log")
@@ -18,20 +18,26 @@ logger.addHandler(logging.StreamHandler())
 load_dotenv()
 USER = os.getenv("TAPO_USERNAME")
 PASS = os.getenv("TAPO_PASSWORD")
-IP = os.getenv("TAPO_ADDRESS_P115")
 
 app = Quart(__name__)
 
-_client = None
+_device_manager = None
 _device = None
 
 async def get_device():
-    global _client, _device
+    global _device_manager, _device
     try:
-        if _client is None:
-            _client = ApiClient(USER, PASS)
+        if _device_manager is None:
+            _device_manager = await asyncio.to_thread(
+                TPLinkDeviceManager, USER, PASS
+            )
         if _device is None:
-            _device = await _client.p115(IP)
+            devices = await _device_manager.get_devices()
+            for d in devices:
+                model = d.device_info.device_model or ""
+                if "P115" in model.upper():
+                    _device = d
+                    break
         return _device
     except Exception as e:
         logging.error(f"Error conectando: {e}")
@@ -41,7 +47,7 @@ async def get_device():
 async def turn_on():
     device = await get_device()
     if device:
-        await device.on()
+        await device.power_on()
         logging.info("Impresora Encendida")
         return jsonify({"status": True})
     return jsonify({"status": "error"}), 500
@@ -50,7 +56,7 @@ async def turn_on():
 async def turn_off():
     device = await get_device()
     if device:
-        await device.off()
+        await device.power_off()
         logging.info("Impresora Apagada")
         return jsonify({"status": False})
     return jsonify({"status": "error"}), 500
@@ -61,9 +67,17 @@ async def status():
     if not device:
         return jsonify({"status": "error"}), 500
     try:
-        device_info = await device.get_device_info_json()
-        is_on = device_info.get("result", device_info).get("device_on", False)
-        return jsonify({"status": is_on})
+        sys_info = await device.get_sys_info()
+        if sys_info is None:
+            return jsonify({"status": "error"}), 500
+        info = sys_info.__dict__ if hasattr(sys_info, "__dict__") else sys_info
+        if "relay_state" in info:
+            is_on = info["relay_state"] == 1
+        elif "device_on" in info:
+            is_on = info["device_on"] is True
+        else:
+            is_on = await device.is_on()
+        return jsonify({"status": bool(is_on)})
     except Exception as e:
         logging.error(f"Error de estado: {e}")
         return jsonify({"status": "error"}), 500
