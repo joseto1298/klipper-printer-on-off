@@ -1,5 +1,4 @@
 import os
-import asyncio
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from dotenv import load_dotenv
@@ -22,37 +21,36 @@ PASS = os.getenv("TAPO_PASSWORD")
 app = Quart(__name__)
 
 _device = None
+_initialized = False
 
-def _init_sync():
-    global _device
+async def ensure_device():
+    global _device, _initialized
+    if _initialized:
+        return _device
     try:
         dm = TPLinkDeviceManager(USER, PASS)
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            devices = loop.run_until_complete(dm.get_devices())
-            for d in devices:
-                if "P115" in (d.device_info.device_model or "").upper():
-                    _device = d
-                    break
-        finally:
-            loop.close()
+        logging.info("Obteniendo dispositivos de la nube Tapo...")
+        devices = await dm.get_devices()
+        for d in devices:
+            model = d.device_info.device_model or ""
+            if "P115" in model.upper():
+                _device = d
+                logging.info(f"Conectado a {d.get_alias()} ({model})")
+                break
         if _device is None:
-            logging.error("No se encontró dispositivo P115")
-        else:
-            logging.info(f"Conectado a {_device.get_alias()}")
+            logging.error("No se encontró dispositivo P115 en la nube")
     except Exception as e:
-        logging.error(f"Error inicializando: {e}")
-
-logging.info("Inicializando conexión a TAPO P115...")
-_init_sync()
+        logging.error(f"Error conectando a nube Tapo: {e}")
+    _initialized = True
+    return _device
 
 @app.route('/on')
 async def turn_on():
-    if not _device:
+    device = await ensure_device()
+    if not device:
         return jsonify({"status": "error"}), 500
     try:
-        await _device.power_on()
+        await device.power_on()
         logging.info("Impresora Encendida")
         return jsonify({"status": True})
     except Exception as e:
@@ -61,10 +59,11 @@ async def turn_on():
 
 @app.route('/off')
 async def turn_off():
-    if not _device:
+    device = await ensure_device()
+    if not device:
         return jsonify({"status": "error"}), 500
     try:
-        await _device.power_off()
+        await device.power_off()
         logging.info("Impresora Apagada")
         return jsonify({"status": False})
     except Exception as e:
@@ -73,10 +72,11 @@ async def turn_off():
 
 @app.route('/status')
 async def status():
-    if not _device:
+    device = await ensure_device()
+    if not device:
         return jsonify({"status": "error"}), 500
     try:
-        sys_info = await _device.get_sys_info()
+        sys_info = await device.get_sys_info()
         if sys_info is None:
             return jsonify({"status": "error"}), 500
         info = sys_info.__dict__ if hasattr(sys_info, "__dict__") else sys_info
@@ -85,7 +85,7 @@ async def status():
         elif "device_on" in info:
             is_on = info["device_on"] is True
         else:
-            is_on = await _device.is_on()
+            is_on = await device.is_on()
         return jsonify({"status": bool(is_on)})
     except Exception as e:
         logging.error(f"Error de estado: {e}")
