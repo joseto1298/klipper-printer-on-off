@@ -1,6 +1,10 @@
-*.log
-*.tmp
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
 .env
-.venv
-config.env
-
+printer_on_off.log
+dist/
+build/
