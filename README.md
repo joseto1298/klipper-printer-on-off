@@ -2,33 +2,37 @@
 
 Este proyecto permite encender y apagar automáticamente una impresora 3D conectada a un enchufe inteligente **TP-Link TAPO P115**, utilizando **Klipper**, **Moonraker** y un servidor HTTP en Python.
 
+Usa la librería [`python-kasa`](https://github.com/python-kasa/python-kasa) para control local del P115 (sin depender de la nube de TP-Link).
+
 ## Características
 
-✅ Encendido y apagado remoto de la impresora.  
-✅ Integración con Moonraker para control automático.  
+✅ Encendido y apagado remoto de la impresora (local, sin nube).  
+✅ Integración con Moonraker (`[power] type: http`).  
 ✅ Verificación de temperatura antes de apagar la impresora.  
-✅ Reintentos en caso de fallos de conexión.
+✅ Reintentos en caso de fallos de conexión.  
+✅ Polling cada 15s para que Moonraker detecte cambios externos.
 
 ---
 
-## 📌 Requisitos
+## Requisitos
 
 - Raspberry Pi con Klipper y Moonraker instalados.
-- Enchufe TP-Link TAPO P115.
+- Enchufe TP-Link TAPO P115 en la misma red.
 - Python 3 y `pip` instalados.
-- Acceso a la API de Moonraker.
+- Cuenta TP-Link/Tapo (para autenticación inicial del dispositivo).
+- **"Third-party compatibility" activado** en la app Tapo (Perfil > Third-Party Services).
 
 ---
 
-## 📦 Instalación
+## Instalación
 
-### 1️⃣ Descargar ficheros
+### 1. Descargar ficheros
 
 ```bash
 cd ~ && git clone https://github.com/joseto1298/klipper-printer-on-off.git
 ```
 
-### 2️⃣ Instalar dependencias
+### 2. Instalar dependencias
 
 ```bash
 sudo apt update && sudo apt install python3-pip python3-venv
@@ -37,54 +41,72 @@ source /home/pi/klipper-printer-on-off/.venv/bin/activate
 pip install -r /home/pi/klipper-printer-on-off/requirements.txt
 ```
 
-### 3️⃣ Configurar credenciales de TAPO
-
-Copiar archivo `example.env` en `/home/pi/klipper-printer-on-off/.env` con:
+### 3. Configurar credenciales de TAPO
 
 ```bash
 cd /home/pi/klipper-printer-on-off
 cp example.env .env
-```
-
-Modificar fichero con:
-
-```bash
-cd /home/pi/klipper-printer-on-off/
 nano .env
 ```
 
-### 4️⃣ Configurar el servicio systemd
+Completar con:
+- `TAPO_ADDRESS_P115` — IP fija del enchufe en tu red.
+- `TAPO_USERNAME` — Email de tu cuenta TP-Link/Tapo.
+- `TAPO_PASSWORD` — Contraseña de tu cuenta TP-Link/Tapo.
 
-Copiar archivo `klipper-printer-on-off` en `/etc/systemd/system/klipper-printer-on-off.service` con:
+> **Importante:** La IP del P115 debe ser estática. Asigna una reserva DHCP en tu router o usa la app Tapo.
+
+### 4. Configurar el servicio systemd
 
 ```bash
 cd /home/pi/klipper-printer-on-off
 sudo cp klipper-printer-on-off.service /etc/systemd/system/klipper-printer-on-off.service
-```
-
-Habilitar y arrancar el servicio:
-
-```bash
 sudo systemctl daemon-reload
 sudo systemctl enable klipper-printer-on-off
 sudo systemctl start klipper-printer-on-off
 ```
 
-### 5️⃣ Configurar Moonraker
+Verificar que arrancó bien:
 
-Añadir el contenido de `moonraker-example.cfg` a `moonraker.cfg`:
+```bash
+sudo journalctl -u klipper-printer-on-off -n 20 --no-pager
+```
+
+### 5. Configurar Moonraker
+
+Añadir el contenido de `moonraker-example.cfg` a `moonraker.conf`:
+
+```bash
+cat ~/klipper-printer-on-off/moonraker-example.cfg >> ~/moonraker.conf
+```
 
 Añadir el contenido de `macro-example.cfg` a `printer.cfg`:
 
-- Encender la impresora: `M80` en Klipper.
-- Apagar la impresora: `M81` en Klipper.
+```bash
+cat ~/klipper-printer-on-off/macro-example.cfg >> ~/printer.cfg
+```
 
-### 6️⃣ Configurar Moonraker
+Luego reiniciar Moonraker y Klipper.
 
-## 📜 Licencia
+### 6. Uso
 
-Proyecto bajo licencia MIT.
+- Encender impresora: `M80` en Klipper.
+- Apagar impresora: `M81` en Klipper.
+- Apagado automático por inactividad (10 min) con espera de enfriamiento.
 
 ---
 
-🚀 **¡Listo! Ahora puedes controlar tu impresora automáticamente con TAPO P115 y Moonraker.**
+## Solución de problemas
+
+| Problema | Causa probable | Solución |
+|---|---|---|
+| No conecta con el P115 | IP incorrecta o credenciales malas | Verificar `.env` y que el P115 tenga IP fija |
+| "Third-party compatibility" error | Firmware >=1.4.0 desactivó la opción | App Tapo > Perfil > Third-Party Services > activar |
+| Moonraker no cambia estado | `poll_interval` no configurado | Verificar `moonraker-example.cfg` |
+| El servicio no arranca | Puerto 56427 ocupado | `sudo ss -tlnp \| grep 56427` |
+
+---
+
+## Licencia
+
+Proyecto bajo licencia MIT.

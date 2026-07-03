@@ -4,7 +4,7 @@ import logging
 from logging.handlers import TimedRotatingFileHandler
 from dotenv import load_dotenv
 from aiohttp import web
-from kasa import Device, DeviceConfig, Credentials
+from kasa import Discover
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_FILE = os.path.join(BASE_DIR, "printer_on_off.log")
@@ -39,8 +39,9 @@ async def ensure_device():
         return None
     _device_last_attempt = time.time()
     try:
-        config = DeviceConfig(host=HOST, credentials=Credentials(USER, PASS))
-        _device = await Device.connect(config=config)
+        _device = await Discover.discover_single(
+            host=HOST, username=USER, password=PASS
+        )
         await _device.update()
         logging.info(f"Conectado a {_device.alias} ({_device.model})")
         global _status_cache
