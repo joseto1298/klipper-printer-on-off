@@ -1,96 +1,108 @@
 import os
+import time
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from dotenv import load_dotenv
-from quart import Quart, jsonify
-from tplinkcloud import TPLinkDeviceManager
+from aiohttp import web
+from kasa import Device, DeviceConfig, Credentials
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_FILE = os.path.join(BASE_DIR, "printer_on_off.log")
-log_handler = TimedRotatingFileHandler(LOG_FILE, when="midnight", interval=1, backupCount=3, encoding="utf-8")
+
+log_handler = TimedRotatingFileHandler(
+    LOG_FILE, when="midnight", interval=1, backupCount=3, encoding="utf-8"
+)
 log_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 logger.addHandler(log_handler)
 logger.addHandler(logging.StreamHandler())
 
 load_dotenv()
+HOST = os.getenv("TAPO_ADDRESS_P115")
 USER = os.getenv("TAPO_USERNAME")
 PASS = os.getenv("TAPO_PASSWORD")
-
-app = Quart(__name__)
+STATUS_CACHE_TTL = int(os.getenv("TAPO_P115_CACHE_TTL", "30"))
 
 _device = None
-_initialized = False
+_device_last_attempt = 0.0
+_status_cache = {"value": None, "time": 0.0}
+BACKOFF_SECONDS = 60
+
 
 async def ensure_device():
-    global _device, _initialized
-    if _initialized:
+    global _device, _device_last_attempt
+    if _device is not None:
         return _device
+    if time.time() - _device_last_attempt < BACKOFF_SECONDS:
+        return None
+    _device_last_attempt = time.time()
     try:
-        dm = TPLinkDeviceManager(USER, PASS)
-        logging.info("Obteniendo dispositivos de la nube Tapo...")
-        devices = await dm.get_devices()
-        for d in devices:
-            model = d.device_info.device_model or ""
-            if "P115" in model.upper():
-                _device = d
-                logging.info(f"Conectado a {d.get_alias()} ({model})")
-                break
-        if _device is None:
-            logging.error("No se encontró dispositivo P115 en la nube")
+        config = DeviceConfig(host=HOST, credentials=Credentials(USER, PASS))
+        _device = await Device.connect(config=config)
+        await _device.update()
+        logging.info(f"Conectado a {_device.alias} ({_device.model})")
+        global _status_cache
+        _status_cache = {"value": bool(_device.is_on), "time": time.time()}
+        return _device
     except Exception as e:
-        logging.error(f"Error conectando a nube Tapo: {e}")
-    _initialized = True
-    return _device
+        logging.error(f"Error conectando P115: {e}")
+        _device = None
+        return None
 
-@app.route('/on')
-async def turn_on():
-    device = await ensure_device()
-    if not device:
-        return jsonify({"status": "error"}), 500
+
+async def handle_on(request):
+    dev = await ensure_device()
+    if not dev:
+        return web.json_response({"status": "error"}, status=500)
     try:
-        await device.power_on()
-        logging.info("Impresora Encendida")
-        return jsonify({"status": True})
+        await dev.turn_on()
+        global _status_cache
+        _status_cache = {"value": True, "time": time.time()}
+        logging.info("Impresora encendida")
+        return web.json_response({"status": True})
     except Exception as e:
         logging.error(f"Error al encender: {e}")
-        return jsonify({"status": "error"}), 500
+        return web.json_response({"status": "error"}, status=500)
 
-@app.route('/off')
-async def turn_off():
-    device = await ensure_device()
-    if not device:
-        return jsonify({"status": "error"}), 500
+
+async def handle_off(request):
+    dev = await ensure_device()
+    if not dev:
+        return web.json_response({"status": "error"}, status=500)
     try:
-        await device.power_off()
-        logging.info("Impresora Apagada")
-        return jsonify({"status": False})
+        await dev.turn_off()
+        global _status_cache
+        _status_cache = {"value": False, "time": time.time()}
+        logging.info("Impresora apagada")
+        return web.json_response({"status": False})
     except Exception as e:
         logging.error(f"Error al apagar: {e}")
-        return jsonify({"status": "error"}), 500
+        return web.json_response({"status": "error"}, status=500)
 
-@app.route('/status')
-async def status():
-    device = await ensure_device()
-    if not device:
-        return jsonify({"status": "error"}), 500
+
+async def handle_status(request):
+    global _status_cache
+    dev = await ensure_device()
+    if not dev:
+        return web.json_response({"status": "error"}, status=500)
+    if time.time() - _status_cache["time"] < STATUS_CACHE_TTL:
+        return web.json_response({"status": _status_cache["value"]})
     try:
-        sys_info = await device.get_sys_info()
-        if sys_info is not None:
-            info = sys_info.__dict__ if hasattr(sys_info, "__dict__") else sys_info
-            if "relay_state" in info:
-                is_on = info["relay_state"] == 1
-            elif "device_on" in info:
-                is_on = info["device_on"] is True
-            else:
-                is_on = await device.is_on()
-        else:
-            is_on = await device.is_on()
-        return jsonify({"status": bool(is_on)})
+        await dev.update()
+        _status_cache = {"value": bool(dev.is_on), "time": time.time()}
+        return web.json_response({"status": _status_cache["value"]})
     except Exception as e:
         logging.error(f"Error de estado: {e}")
-        return jsonify({"status": "error"}), 500
+        return web.json_response({"status": "error"}, status=500)
 
-if __name__ == '__main__':
-    app.run(host="127.0.0.1", port=56427)
+
+app = web.Application()
+app.router.add_get("/on", handle_on)
+app.router.add_get("/off", handle_off)
+app.router.add_get("/status", handle_status)
+
+if __name__ == "__main__":
+    logging.info("Iniciando servidor en 127.0.0.1:56427")
+    web.run_app(app, host="127.0.0.1", port=56427)
