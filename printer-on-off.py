@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import logging
 from logging.handlers import TimedRotatingFileHandler
@@ -25,6 +26,14 @@ USER = os.getenv("TAPO_USERNAME")
 PASS = os.getenv("TAPO_PASSWORD")
 STATUS_CACHE_TTL = int(os.getenv("TAPO_P115_CACHE_TTL", "30"))
 
+if not all([HOST, USER, PASS]):
+    logger.error(
+        "Faltan variables de entorno obligatorias. "
+        "Verifica que TAPO_ADDRESS_P115, TAPO_USERNAME y TAPO_PASSWORD "
+        "estan definidas en el archivo .env"
+    )
+    sys.exit(1)
+
 _device = None
 _device_last_attempt = 0.0
 _status_cache = {"value": None, "time": 0.0}
@@ -43,14 +52,25 @@ async def ensure_device():
             host=HOST, username=USER, password=PASS
         )
         await _device.update()
-        logging.info(f"Conectado a {_device.alias} ({_device.model})")
+        logger.info(f"Conectado a {_device.alias} ({_device.model})")
         global _status_cache
         _status_cache = {"value": bool(_device.is_on), "time": time.time()}
         return _device
     except Exception as e:
-        logging.error(f"Error conectando P115: {e}")
+        logger.error(f"Error conectando P115: {e}")
         _device = None
         return None
+
+
+async def disconnect_device():
+    global _device
+    if _device is not None:
+        try:
+            await _device.disconnect()
+            logger.info("Desconectado del Tapo P115")
+        except Exception as e:
+            logger.error(f"Error al desconectar: {e}")
+        _device = None
 
 
 async def handle_on(request):
@@ -61,10 +81,10 @@ async def handle_on(request):
         await dev.turn_on()
         global _status_cache
         _status_cache = {"value": True, "time": time.time()}
-        logging.info("Impresora encendida")
+        logger.info("Impresora encendida")
         return web.json_response({"status": True})
     except Exception as e:
-        logging.error(f"Error al encender: {e}")
+        logger.error(f"Error al encender: {e}")
         return web.json_response({"status": "error"}, status=500)
 
 
@@ -76,10 +96,10 @@ async def handle_off(request):
         await dev.turn_off()
         global _status_cache
         _status_cache = {"value": False, "time": time.time()}
-        logging.info("Impresora apagada")
+        logger.info("Impresora apagada")
         return web.json_response({"status": False})
     except Exception as e:
-        logging.error(f"Error al apagar: {e}")
+        logger.error(f"Error al apagar: {e}")
         return web.json_response({"status": "error"}, status=500)
 
 
@@ -95,15 +115,27 @@ async def handle_status(request):
         _status_cache = {"value": bool(dev.is_on), "time": time.time()}
         return web.json_response({"status": _status_cache["value"]})
     except Exception as e:
-        logging.error(f"Error de estado: {e}")
+        logger.error(f"Error de estado: {e}")
         return web.json_response({"status": "error"}, status=500)
+
+
+async def handle_health(request):
+    return web.json_response({"status": "ok"})
 
 
 app = web.Application()
 app.router.add_get("/on", handle_on)
 app.router.add_get("/off", handle_off)
 app.router.add_get("/status", handle_status)
+app.router.add_get("/health", handle_health)
+
+
+async def on_shutdown(app):
+    await disconnect_device()
+
+
+app.on_shutdown.append(on_shutdown)
 
 if __name__ == "__main__":
-    logging.info("Iniciando servidor en 127.0.0.1:56427")
+    logger.info("Iniciando servidor en 127.0.0.1:56427")
     web.run_app(app, host="127.0.0.1", port=56427)

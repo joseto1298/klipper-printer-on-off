@@ -11,6 +11,9 @@ Usa la librería [`python-kasa`](https://github.com/python-kasa/python-kasa) par
 - Verificacion de temperatura antes de apagar la impresora
 - Cache de estado con TTL configurable (por defecto 30s) para evitar saturar el P115
 - Reintentos con backoff de 60s en caso de fallos de conexion
+- Endpoint de health check (`/health`) para verificar que el servidor esta activo
+- Validacion de variables de entorno al arrancar (falla rapido si falta configuracion)
+- Desconexion limpia del Tapo al apagar el servicio
 
 ---
 
@@ -94,16 +97,29 @@ Luego reiniciar Moonraker y Klipper.
 - Apagar impresora: `M81` en Klipper.
 - Apagado automatico por inactividad (10 min) con espera de enfriamiento.
 
+### Endpoints HTTP
+
+El servidor expone estos endpoints en `http://localhost:56427`:
+
+| Endpoint | Metodo | Descripcion |
+|---|---|---|
+| `/on` | GET | Enciende la impresora |
+| `/off` | GET | Apaga la impresora |
+| `/status` | GET | Retorna estado (`{"status": true/false}`) |
+| `/health` | GET | Verifica que el servidor esta activo (`{"status": "ok"}`) |
+
 ---
 
 ## Solucion de problemas
 
 | Problema | Causa probable | Solucion |
 |---|---|---|
+| El servidor no arranca con error de variables | Falta `.env` o variables incompletas | Verificar que `TAPO_ADDRESS_P115`, `TAPO_USERNAME` y `TAPO_PASSWORD` estan definidos |
 | No conecta con el P115 | IP incorrecta o credenciales malas | Verificar `.env` y que el P115 tenga IP fija |
 | "Third-party compatibility" error | Firmware >=1.4.0 desactivo la opcion | App Tapo > Perfil > Third-Party Services > activar |
 | Moonraker no cambia estado | `poll_interval` no configurado | Verificar `moonraker-example.cfg` |
 | El servicio no arranca | Puerto 56427 ocupado | `sudo ss -tlnp \| grep 56427` |
+| No conecta tras reinicio del servicio | Backoff de reconexion (60s) | Esperar 60s o reiniciar el servicio |
 
 ---
 
