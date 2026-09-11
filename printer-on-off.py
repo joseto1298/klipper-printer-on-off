@@ -39,6 +39,17 @@ _status_cache = {"value": None, "time": 0.0}
 BACKOFF_SECONDS = 60
 
 
+def _is_session_expired(e: Exception) -> bool:
+    msg = str(e).lower()
+    return "session" in msg and ("timeout" in msg or "expired" in msg or "unauthorized" in msg)
+
+
+def _invalidate_device():
+    global _device
+    _device = None
+    _device_last_attempt = 0.0
+
+
 async def ensure_device():
     global _device, _device_last_attempt
     if _device is not None:
@@ -86,6 +97,8 @@ async def handle_on(request):
         logger.info("Impresora encendida")
         return web.json_response({"status": True})
     except Exception as e:
+        if _is_session_expired(e):
+            _invalidate_device()
         logger.error(f"Error al encender: {e}")
         return web.json_response({"status": "error"}, status=500)
 
@@ -101,6 +114,8 @@ async def handle_off(request):
         logger.info("Impresora apagada")
         return web.json_response({"status": False})
     except Exception as e:
+        if _is_session_expired(e):
+            _invalidate_device()
         logger.error(f"Error al apagar: {e}")
         return web.json_response({"status": "error"}, status=500)
 
@@ -118,6 +133,8 @@ async def handle_status(request):
         _status_cache = {"value": is_on, "time": time.time()}
         return web.json_response({"status": _status_cache["value"]})
     except Exception as e:
+        if _is_session_expired(e):
+            _invalidate_device()
         logger.error(f"Error de estado: {e}")
         return web.json_response({"status": "error"}, status=500)
 
