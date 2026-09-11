@@ -5,7 +5,7 @@ import logging
 from logging.handlers import TimedRotatingFileHandler
 from dotenv import load_dotenv
 from aiohttp import web
-from kasa import Discover
+from tapo import ApiClient
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_FILE = os.path.join(BASE_DIR, "printer_on_off.log")
@@ -21,18 +21,18 @@ logger.addHandler(log_handler)
 logger.addHandler(logging.StreamHandler())
 
 load_dotenv()
-HOST = os.getenv("TAPO_ADDRESS_P115")
-USER = os.getenv("TAPO_USERNAME")
-PASS = os.getenv("TAPO_PASSWORD")
-STATUS_CACHE_TTL = int(os.getenv("TAPO_P115_CACHE_TTL", "30"))
+TAPO_EMAIL = os.getenv("TAPO_EMAIL")
+TAPO_PASSWORD = os.getenv("TAPO_PASSWORD")
+TAPO_IP = os.getenv("TAPO_ADDRESS_P115")
 
-if not all([HOST, USER, PASS]):
+if not all([TAPO_IP, TAPO_EMAIL, TAPO_PASSWORD]):
     logger.error(
         "Faltan variables de entorno obligatorias. "
-        "Verifica que TAPO_ADDRESS_P115, TAPO_USERNAME y TAPO_PASSWORD "
-        "estan definidas en el archivo .env"
+        "Verifica TAPO_ADDRESS_P115, TAPO_EMAIL y TAPO_PASSWORD en el archivo .env"
     )
     sys.exit(1)
+STATUS_CACHE_TTL = int(os.getenv("TAPO_P115_CACHE_TTL", "30"))
+
 
 _device = None
 _device_last_attempt = 0.0
@@ -48,16 +48,16 @@ async def ensure_device():
         return None
     _device_last_attempt = time.time()
     try:
-        _device = await Discover.discover_single(
-            host=HOST, username=USER, password=PASS
-        )
-        await _device.update()
-        logger.info(f"Conectado a {_device.alias} ({_device.model})")
+        client = ApiClient(TAPO_EMAIL, TAPO_PASSWORD)
+        _device = await client.p115(TAPO_IP)
+        info = await _device.get_device_info()
+        logger.info(f"Conectado a Tapo P115 en {TAPO_IP}")
         global _status_cache
-        _status_cache = {"value": bool(_device.is_on), "time": time.time()}
+        is_on = getattr(info, "device_on", False)
+        _status_cache = {"value": bool(is_on), "time": time.time()}
         return _device
     except Exception as e:
-        logger.error(f"Error conectando P115: {e}")
+        logger.error(f"Error conectando P115 con tapo: {e}")
         _device = None
         return None
 
@@ -66,20 +66,20 @@ async def disconnect_device():
     global _device
     if _device is not None:
         try:
-            await _device.disconnect()
-            logger.info("Desconectado del Tapo P115")
+            await _device.refresh_session()
+            logger.info("Sesión Tapo P115 cerrada")
         except Exception as e:
             logger.error(f"Error al desconectar: {e}")
         _device = None
 
 
 async def handle_on(request):
+    global _status_cache
     dev = await ensure_device()
     if not dev:
         return web.json_response({"status": "error"}, status=500)
     try:
-        await dev.turn_on()
-        global _status_cache
+        await dev.on()
         _status_cache = {"value": True, "time": time.time()}
         logger.info("Impresora encendida")
         return web.json_response({"status": True})
@@ -89,12 +89,12 @@ async def handle_on(request):
 
 
 async def handle_off(request):
+    global _status_cache
     dev = await ensure_device()
     if not dev:
         return web.json_response({"status": "error"}, status=500)
     try:
-        await dev.turn_off()
-        global _status_cache
+        await dev.off()
         _status_cache = {"value": False, "time": time.time()}
         logger.info("Impresora apagada")
         return web.json_response({"status": False})
@@ -111,8 +111,9 @@ async def handle_status(request):
     if time.time() - _status_cache["time"] < STATUS_CACHE_TTL:
         return web.json_response({"status": _status_cache["value"]})
     try:
-        await dev.update()
-        _status_cache = {"value": bool(dev.is_on), "time": time.time()}
+        info = await dev.get_device_info()
+        is_on = getattr(info, "device_on", False)
+        _status_cache = {"value": bool(is_on), "time": time.time()}
         return web.json_response({"status": _status_cache["value"]})
     except Exception as e:
         logger.error(f"Error de estado: {e}")

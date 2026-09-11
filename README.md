@@ -2,11 +2,11 @@
 
 Este proyecto permite encender y apagar automáticamente una impresora 3D conectada a un enchufe inteligente **TP-Link TAPO P115**, utilizando **Klipper**, **Moonraker** y un servidor HTTP en Python.
 
-Usa la librería [`python-kasa`](https://github.com/python-kasa/python-kasa) para control local del P115 vía protocolo KLAP (puerto 9999).
+Usa la librería [`tapo`](https://github.com/mihai-dinculescu/tapo) para el control del P115 mediante la cuenta TP-Link y protocolo local.
 
 ## Caracteristicas
 
-- Encendido y apagado remoto de la impresora (local, sin depender de la nube de TP-Link)
+- Encendido y apagado remoto de la impresora vía cuenta TP-Link (`tapo>=0.9`)
 - Integracion con Moonraker (`[power] type: http`)
 - Verificacion de temperatura antes de apagar la impresora
 - Cache de estado con TTL configurable (por defecto 30s) para evitar saturar el P115
@@ -22,7 +22,7 @@ Usa la librería [`python-kasa`](https://github.com/python-kasa/python-kasa) par
 - Raspberry Pi con Klipper y Moonraker instalados
 - Enchufe TP-Link TAPO P115 en la misma red
 - Python 3 y `pip` instalados
-- Cuenta TP-Link/Tapo (para autenticacion inicial del dispositivo)
+- Cuenta TP-Link/Tapo (para autenticación vía `TAPO_EMAIL`)
 - IP fija para el P115 (reserva DHCP en el router o configuracion manual en la app Tapo)
 - **"Third-party compatibility" activado** en la app Tapo (Perfil > Third-Party Services)
 
@@ -55,8 +55,8 @@ nano .env
 
 Completar con:
 - `TAPO_ADDRESS_P115` — IP fija del enchufe en tu red.
-- `TAPO_USERNAME` — Email de tu cuenta TP-Link/Tapo.
-- `TAPO_PASSWORD` — Contrasena de tu cuenta TP-Link/Tapo.
+- `TAPO_EMAIL` — Email de tu cuenta TP-Link/Tapo.
+- `TAPO_PASSWORD` — Contraseña de tu cuenta TP-Link/Tapo.
 - `TAPO_P115_CACHE_TTL` — Tiempo de cache del estado en segundos (default 30).
 
 ### 4. Configurar el servicio systemd
@@ -114,7 +114,7 @@ El servidor expone estos endpoints en `http://localhost:56427`:
 
 | Problema | Causa probable | Solucion |
 |---|---|---|
-| El servidor no arranca con error de variables | Falta `.env` o variables incompletas | Verificar que `TAPO_ADDRESS_P115`, `TAPO_USERNAME` y `TAPO_PASSWORD` estan definidos |
+| El servidor no arranca con error de variables | Falta `.env` o variables incompletas | Verificar que `TAPO_ADDRESS_P115`, `TAPO_EMAIL` y `TAPO_PASSWORD` estan definidos |
 | No conecta con el P115 | IP incorrecta o credenciales malas | Verificar `.env` y que el P115 tenga IP fija |
 | "Third-party compatibility" error | Firmware >=1.4.0 desactivo la opcion | App Tapo > Perfil > Third-Party Services > activar |
 | Moonraker no cambia estado | `poll_interval` no configurado | Verificar `moonraker-example.cfg` |
