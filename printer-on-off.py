@@ -33,7 +33,6 @@ if not all([TAPO_IP, TAPO_EMAIL, TAPO_PASSWORD]):
     sys.exit(1)
 STATUS_CACHE_TTL = int(os.getenv("TAPO_P115_CACHE_TTL", "30"))
 
-
 _device = None
 _device_last_attempt = 0.0
 _status_cache = {"value": None, "time": 0.0}
@@ -50,11 +49,14 @@ async def ensure_device():
     try:
         client = ApiClient(TAPO_EMAIL, TAPO_PASSWORD)
         _device = await client.p115(TAPO_IP)
-        info = await _device.get_device_info()
         logger.info(f"Conectado a Tapo P115 en {TAPO_IP}")
-        global _status_cache
-        is_on = getattr(info, "device_on", False)
-        _status_cache = {"value": bool(is_on), "time": time.time()}
+        try:
+            info = await _device.get_device_info_json()
+            global _status_cache
+            is_on = bool(info.get("device_on", False))
+            _status_cache = {"value": is_on, "time": time.time()}
+        except Exception:
+            pass
         return _device
     except Exception as e:
         logger.error(f"Error conectando P115 con tapo: {e}")
@@ -111,9 +113,9 @@ async def handle_status(request):
     if time.time() - _status_cache["time"] < STATUS_CACHE_TTL:
         return web.json_response({"status": _status_cache["value"]})
     try:
-        info = await dev.get_device_info()
-        is_on = getattr(info, "device_on", False)
-        _status_cache = {"value": bool(is_on), "time": time.time()}
+        info = await dev.get_device_info_json()
+        is_on = bool(info.get("device_on", False))
+        _status_cache = {"value": is_on, "time": time.time()}
         return web.json_response({"status": _status_cache["value"]})
     except Exception as e:
         logger.error(f"Error de estado: {e}")
