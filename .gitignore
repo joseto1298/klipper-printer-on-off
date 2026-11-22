@@ -8,3 +8,4 @@ venv/
 printer_on_off.log
 dist/
 build/
+printer_on_off.log.*
